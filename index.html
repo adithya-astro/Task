@@ -4,44 +4,60 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Team Task Sync</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon.png">
+
     <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
     <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <style>
-        :root { --primary: #007bff; --success: #28a745; --bg: #f8f9fa; }
-        body { font-family: system-ui; background: var(--bg); margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
-        #status-bar { background: #333; color: white; padding: 12px; text-align: center; font-size: 13px; sticky; top: 0; }
+        :root { --primary: #007bff; --success: #28a745; --bg: #f2f4f7; --text: #333; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; min-height: 100vh; color: var(--text); }
+        
+        #status-bar { background: #333; color: white; padding: 14px; text-align: center; font-size: 13px; font-weight: bold; position: sticky; top: 0; z-index: 1000; }
+        #status-bar.syncing { background: var(--primary); }
+
         .container { padding: 15px; max-width: 500px; margin: 0 auto; width: 100%; box-sizing: border-box; flex-grow: 1; }
-        .card { background: white; padding: 20px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        .task-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; }
-        .task-item:last-child { border-bottom: none; }
-        input[type="text"] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ddd; margin-bottom: 10px; font-size: 16px; }
-        .btn { padding: 12px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; width: 100%; }
+        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        
+        .task-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #fff; border-radius: 12px; margin-bottom: 8px; border: 1px solid #eee; }
+        .task-text { flex-grow: 1; font-size: 16px; margin-right: 10px; }
+        
+        input[type="text"] { width: 100%; padding: 14px; border-radius: 12px; border: 2px solid #eee; margin-bottom: 12px; font-size: 16px; box-sizing: border-box; outline: none; transition: border-color 0.2s; }
+        input[type="text"]:focus { border-color: var(--primary); }
+        
+        .btn { padding: 16px; border: none; border-radius: 14px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; transition: opacity 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn:active { opacity: 0.8; }
         .btn-add { background: var(--primary); color: white; }
-        .btn-sync { background: var(--success); color: white; margin-top: 10px; }
+        .btn-sync { background: #fff; border: 1px solid #ddd; color: #666; margin-top: 10px; }
+        .btn-del { color: #dc3545; background: #fff5f5; padding: 8px 12px; border-radius: 8px; width: auto; font-size: 14px; }
+        
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-<div id="status-bar">Connecting Team Cloud...</div>
+<div id="status-bar">Initializing Team Cloud...</div>
 
 <div class="container">
-    <div id="auth-view" class="card" style="text-align: center;">
-        <h2>Team Task Manager</h2>
+    <div id="auth-view" class="card" style="text-align: center; padding: 40px 20px;">
+        <h2 style="margin-top:0">Team Task Manager</h2>
+        <p style="color: #666; margin-bottom: 25px;">Sign in to sync tasks with your team via Google Drive.</p>
         <button class="btn btn-add" onclick="handleAuth()">Login with Google</button>
     </div>
 
     <div id="app-view" class="hidden">
         <div class="card">
-            <input type="text" id="taskInput" placeholder="Enter new task...">
+            <input type="text" id="taskInput" placeholder="What needs to be done?">
             <button class="btn btn-add" onclick="addTask()">+ Add Team Task</button>
         </div>
 
-        <div class="card">
-            <h3>Active Tasks</h3>
-            <div id="taskList"></div>
-            <button class="btn btn-sync" onclick="syncFromDrive()">🔄 Refresh List</button>
-        </div>
+        <h3 style="margin-left: 10px; color: #555;">Active Tasks</h3>
+        <div id="taskList"></div>
+        
+        <button class="btn btn-sync" onclick="syncFromDrive()">🔄 Refresh Team List</button>
+        <button class="btn btn-sync" style="margin-top:20px; color: #dc3545;" onclick="logout()">Sign Out</button>
     </div>
 </div>
 
@@ -52,24 +68,40 @@
     let driveFileId = null;
     let tokenClient;
 
+    // Service Worker Registration
     if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('Service Worker registered', reg))
-            .catch(err => console.log('Service Worker failed', err));
-    });
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').catch(console.error);
+        });
     }
 
     function gapiLoaded() { gapi.load('client', () => gapi.client.init({})); }
+    
     function gisLoaded() { 
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID, scope: SCOPES,
+            prompt: '', // Enables silent refresh
             callback: (resp) => {
+                if (resp.error) return;
                 localStorage.setItem('g_token', resp.access_token);
+                localStorage.setItem('g_expiry', Date.now() + (resp.expires_in * 1000));
                 startApp();
             },
         });
-        if (localStorage.getItem('g_token')) startApp();
+        checkAuth();
+    }
+
+    function checkAuth() {
+        const token = localStorage.getItem('g_token');
+        const expiry = localStorage.getItem('g_expiry');
+        if (token && expiry && Date.now() < (expiry - 60000)) {
+            gapi.client.setToken({ access_token: token });
+            startApp();
+        } else if (token) {
+            tokenClient.requestAccessToken({ prompt: 'none' });
+        } else {
+            document.getElementById('status-bar').innerText = "☁️ Offline Mode";
+        }
     }
 
     function handleAuth() { tokenClient.requestAccessToken({prompt: 'consent'}); }
@@ -83,33 +115,45 @@
     async function syncFromDrive() {
         const bar = document.getElementById('status-bar');
         bar.innerText = "🔄 Syncing Team Data...";
-        const response = await gapi.client.request({
-            path: 'https://www.googleapis.com/drive/v3/files',
-            params: { q: "name = 'team_tasks_shared.json' and trashed = false" }
-        });
-        const files = response.result.files;
-        if (files && files.length > 0) {
-            driveFileId = files[0].id;
-            const content = await gapi.client.request({
-                path: `https://www.googleapis.com/drive/v3/files/${driveFileId}`,
-                params: { alt: 'media' }
+        bar.classList.add('syncing');
+        try {
+            const response = await gapi.client.request({
+                path: 'https://www.googleapis.com/drive/v3/files',
+                params: { q: "name = 'team_tasks_shared.json' and trashed = false" }
             });
-            teamTasks = content.result || [];
-            renderTasks();
+            const files = response.result.files;
+            if (files && files.length > 0) {
+                driveFileId = files[0].id;
+                const content = await gapi.client.request({
+                    path: `https://www.googleapis.com/drive/v3/files/${driveFileId}`,
+                    params: { alt: 'media' }
+                });
+                teamTasks = Array.isArray(content.result) ? content.result : [];
+                renderTasks();
+            }
+            bar.innerText = "✅ Team Synced";
+        } catch (e) {
+            bar.innerText = "⚠️ Sync Error - Re-login required";
         }
-        bar.innerText = "✅ Team Synced";
+        bar.classList.remove('syncing');
     }
 
     function addTask() {
         const input = document.getElementById('taskInput');
-        if (!input.value) return;
-        teamTasks.push({ id: Date.now(), text: input.value, user: "Team Member" });
+        if (!input.value.trim()) return;
+        teamTasks.push({ id: Date.now(), text: input.value, user: "Member" });
         input.value = "";
         renderTasks();
         saveToDrive();
     }
 
     async function saveToDrive() {
+        const expiry = localStorage.getItem('g_expiry');
+        if (Date.now() > (expiry - 60000)) {
+            tokenClient.requestAccessToken({ prompt: 'none' });
+            return;
+        }
+
         const metadata = { name: 'team_tasks_shared.json', mimeType: 'application/json' };
         const content = JSON.stringify(teamTasks);
         const boundary = 'task_boundary';
@@ -132,8 +176,8 @@
         const list = document.getElementById('taskList');
         list.innerHTML = teamTasks.map(t => `
             <div class="task-item">
-                <span>${t.text}</span>
-                <button onclick="deleteTask(${t.id})" style="color:red; background:none; border:none;">X</button>
+                <span class="task-text">${t.text}</span>
+                <button class="btn btn-del" onclick="deleteTask(${t.id})">Delete</button>
             </div>
         `).join('');
     }
@@ -142,6 +186,11 @@
         teamTasks = teamTasks.filter(t => t.id !== id);
         renderTasks();
         saveToDrive();
+    }
+
+    function logout() {
+        localStorage.clear();
+        location.reload();
     }
 </script>
 </body>

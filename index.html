@@ -13,12 +13,12 @@
     <style>
         :root { --primary: #007bff; --success: #28a745; --bg: #f2f4f7; --text: #333; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; min-height: 100vh; color: var(--text); }
-        #status-bar { background: #333; color: white; padding: 14px; text-align: center; font-size: 13px; font-weight: bold; position: sticky; top: 0; z-index: 1000; transition: background 0.3s; }
+        #status-bar { background: #333; color: white; padding: 14px; text-align: center; font-size: 13px; font-weight: bold; position: sticky; top: 0; z-index: 1000; }
         .container { padding: 15px; max-width: 500px; margin: 0 auto; width: 100%; box-sizing: border-box; }
         .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .task-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #fff; border-radius: 12px; margin-bottom: 8px; border: 1px solid #eee; }
         input[type="text"] { width: 100%; padding: 14px; border-radius: 12px; border: 2px solid #eee; margin-bottom: 12px; font-size: 16px; box-sizing: border-box; outline: none; }
-        .btn { padding: 16px; border: none; border-radius: 14px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; transition: 0.2s; }
+        .btn { padding: 16px; border: none; border-radius: 14px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; }
         .btn:disabled { background: #ccc !important; cursor: not-allowed; }
         .btn-add { background: var(--primary); color: white; }
         .btn-sync { background: #fff; border: 1px solid #ddd; color: #666; margin-top: 10px; }
@@ -26,26 +26,23 @@
     </style>
 
     <script>
-        // Replace with your actual Client ID
+        // 1. CONFIGURATION
         const CLIENT_ID = '292932461234-cu1s96jcvqcseojqpqvul266fk719ung.apps.googleusercontent.com';
         const SCOPES = 'https://www.googleapis.com/auth/drive.file';
         
         let teamTasks = [];
         let driveFileId = null;
-        let tokenClient = null; // Initialized as null to check readiness
+        let tokenClient = null;
 
-        // Callback for Google API Client
-        function gapiLoaded() {
-            console.log("GAPI Loaded");
+        // 2. GOOGLE CALLBACKS (Defined first so they are ready)
+        window.gapiLoaded = function() {
             gapi.load('client', async () => {
                 await gapi.client.init({});
-                console.log("GAPI Client Initialized");
+                console.log("GAPI Initialized");
             });
-        }
+        };
 
-        // Callback for Google Identity Services
-        function gisLoaded() {
-            console.log("GIS Loaded");
+        window.gisLoaded = function() {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
@@ -57,14 +54,14 @@
                     startApp();
                 },
             });
-            
-            // Enable the login button once tokenClient is ready
-            const loginBtn = document.getElementById('login-btn');
-            if(loginBtn) loginBtn.disabled = false;
+            // Unlock button
+            const btn = document.getElementById('login-btn');
+            if(btn) btn.disabled = false;
             
             checkAuth();
-        }
+        };
 
+        // 3. CORE LOGIC
         function checkAuth() {
             const token = localStorage.getItem('g_token');
             const expiry = localStorage.getItem('g_expiry');
@@ -73,8 +70,6 @@
                 startApp();
             } else if (token && tokenClient) {
                 tokenClient.requestAccessToken({ prompt: 'none' });
-            } else {
-                document.getElementById('status-bar').innerText = "☁️ Sign in to Sync";
             }
         }
 
@@ -82,7 +77,7 @@
             if (tokenClient) {
                 tokenClient.requestAccessToken({prompt: 'consent'});
             } else {
-                alert("Google is still connecting. Please wait 3 seconds.");
+                alert("Please wait, connecting to Google...");
             }
         }
 
@@ -93,12 +88,11 @@
         }
 
         async function syncFromDrive() {
-            const bar = document.getElementById('status-bar');
-            bar.innerText = "🔄 Syncing Team Data...";
+            document.getElementById('status-bar').innerText = "🔄 Syncing Team Data...";
             try {
                 const response = await gapi.client.request({
                     path: 'https://www.googleapis.com/drive/v3/files',
-                    params: { q: "name = 'team_tasks_v3.json' and trashed = false" }
+                    params: { q: "name = 'team_tasks_shared.json' and trashed = false" }
                 });
                 const files = response.result.files;
                 if (files && files.length > 0) {
@@ -110,37 +104,29 @@
                     teamTasks = Array.isArray(content.result) ? content.result : [];
                     renderTasks();
                 }
-                bar.innerText = "✅ Team Cloud Active";
+                document.getElementById('status-bar').innerText = "✅ Team Synced";
             } catch (e) {
-                bar.innerText = "⚠️ Connection Error";
+                document.getElementById('status-bar').innerText = "⚠️ Connection Error";
             }
         }
 
         async function saveToDrive() {
-            const bar = document.getElementById('status-bar');
-            bar.innerText = "☁️ Saving to Cloud...";
-            const metadata = { name: 'team_tasks_v3.json', mimeType: 'application/json' };
+            const metadata = { name: 'team_tasks_shared.json', mimeType: 'application/json' };
             const content = JSON.stringify(teamTasks);
             const boundary = 'task_boundary';
             let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-            let method = 'POST';
-            if (driveFileId) {
-                url = `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart`;
-                method = 'PATCH';
-            }
+            let method = driveFileId ? 'PATCH' : 'POST';
+            if (driveFileId) url = `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart`;
+
             const body = `--${boundary}\nContent-Type: application/json; charset=UTF-8\n\n${JSON.stringify(metadata)}\n` +
                          `--${boundary}\nContent-Type: application/json\n\n${content}\n--${boundary}--`;
 
-            try {
-                await gapi.client.request({
-                    path: url, method: method,
-                    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-                    body: body
-                });
-                bar.innerText = "✅ Saved for Team";
-            } catch (e) {
-                bar.innerText = "⚠️ Save Failed";
-            }
+            await gapi.client.request({
+                path: url, method: method,
+                headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+                body: body
+            });
+            document.getElementById('status-bar').innerText = "✅ Cloud Updated";
         }
 
         function renderTasks() {
@@ -148,7 +134,7 @@
             list.innerHTML = teamTasks.map(t => `
                 <div class="task-item">
                     <span>${t.text}</span>
-                    <button onclick="deleteTask(${t.id})" style="color:red; background:none; border:none; font-weight:bold; cursor:pointer;">X</button>
+                    <button onclick="deleteTask(${t.id})" style="color:red; background:none; border:none; font-weight:bold;">X</button>
                 </div>
             `).join('');
         }
@@ -168,16 +154,10 @@
             saveToDrive();
         }
 
-        function logout() {
-            localStorage.clear();
-            location.reload();
-        }
+        function logout() { localStorage.clear(); location.reload(); }
 
-        // PWA Service Worker Registration
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(console.error);
-            });
+            window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
         }
     </script>
 
@@ -186,23 +166,23 @@
 </head>
 <body>
 
-<div id="status-bar">Connecting to Cloud Services...</div>
+<div id="status-bar">Connecting to Google...</div>
 
 <div class="container">
     <div id="auth-view" class="card" style="text-align: center;">
         <h2>Team Tasks</h2>
-        <p style="color: #666; font-size: 14px;">Collaborate in real-time using Google Drive.</p>
+        <p>Real-time collaboration via Google Drive.</p>
         <button id="login-btn" class="btn btn-add" onclick="handleAuth()" disabled>Login with Google</button>
     </div>
 
     <div id="app-view" class="hidden">
         <div class="card">
-            <input type="text" id="taskInput" placeholder="What needs to be done?">
-            <button class="btn btn-add" onclick="addTask()">+ Add Team Task</button>
+            <input type="text" id="taskInput" placeholder="New task...">
+            <button class="btn btn-add" onclick="addTask()">+ Add Task</button>
         </div>
         <div id="taskList"></div>
-        <button class="btn btn-sync" onclick="syncFromDrive()">🔄 Refresh List</button>
-        <button class="btn btn-sync" style="color:#dc3545; border-color:#dc3545;" onclick="logout()">Sign Out</button>
+        <button class="btn btn-sync" onclick="syncFromDrive()">🔄 Refresh Team List</button>
+        <button class="btn btn-sync" style="color:red" onclick="logout()">Logout</button>
     </div>
 </div>
 

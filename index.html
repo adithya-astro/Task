@@ -27,18 +27,19 @@
 
     <script>
         // 1. SETTINGS
-        const CLIENT_ID = '292932461234-cu1s96jcvqcseojqpqvul266fk719ung.apps.googleusercontent.com';
+        const GOOGLE_CLIENT_ID = '292932461234-cu1s96jcvqcseojqpqvul266fk719ung.apps.googleusercontent.com';
+        const SHARED_FILE_ID = '1QuZ03Nu3FxVvUJfFlMl3RHt1XqB2r_2C'; // <<< IMPORTANT: REPLACE WITH YOUR SHARED GOOGLE DRIVE FILE ID
         const SCOPES = 'https://www.googleapis.com/auth/drive.file';
         
         let teamTasks = [];
-        let driveFileId = null;
+        // let driveFileId = null; // Removed as we use SHARED_FILE_ID directly
         let tokenClient = null;
 
         // 2. THE INITIALIZERS (Manually called after scripts load)
         function initializeApp() {
             // Setup Google Identity Services
             tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
+                client_id: GOOGLE_CLIENT_ID,
                 scope: SCOPES,
                 prompt: '',
                 callback: (resp) => {
@@ -85,36 +86,37 @@
         }
 
         async function syncFromDrive() {
+            if (SHARED_FILE_ID === 'YOUR_GOOGLE_DRIVE_FILE_ID_HERE' || !SHARED_FILE_ID) {
+                document.getElementById('status-bar').innerText = "⚠️ Please set SHARED_FILE_ID in index.html";
+                return;
+            }
             document.getElementById('status-bar').innerText = "🔄 Syncing Team Data...";
             try {
-                const response = await gapi.client.request({
-                    path: 'https://www.googleapis.com/drive/v3/files',
-                    params: { q: "name = 'team_tasks_shared.json' and trashed = false" }
+                // Directly fetch content using the SHARED_FILE_ID
+                const content = await gapi.client.request({
+                    path: `https://www.googleapis.com/drive/v3/files/${SHARED_FILE_ID}`,
+                    params: { alt: 'media' }
                 });
-                const files = response.result.files;
-                if (files && files.length > 0) {
-                    driveFileId = files[0].id;
-                    const content = await gapi.client.request({
-                        path: `https://www.googleapis.com/drive/v3/files/${driveFileId}`,
-                        params: { alt: 'media' }
-                    });
-                    teamTasks = Array.isArray(content.result) ? content.result : [];
-                    renderTasks();
-                }
+                teamTasks = Array.isArray(content.result) ? content.result : [];
+                renderTasks();
                 document.getElementById('status-bar').innerText = "✅ Team Synced";
             } catch (e) {
-                document.getElementById('status-bar').innerText = "⚠️ Connection Issue";
+                console.error('Error syncing from Drive:', e);
+                document.getElementById('status-bar').innerText = "⚠️ Could not access shared file. Check ID and permissions.";
             }
         }
 
         async function saveToDrive() {
+            if (SHARED_FILE_ID === 'YOUR_GOOGLE_DRIVE_FILE_ID_HERE' || !SHARED_FILE_ID) {
+                document.getElementById('status-bar').innerText = "⚠️ Cannot save: SHARED_FILE_ID not set.";
+                return;
+            }
             document.getElementById('status-bar').innerText = "☁️ Saving...";
-            const metadata = { name: 'team_tasks_shared.json', mimeType: 'application/json' };
+            const metadata = { name: 'team_tasks_shared.json', mimeType: 'application/json' }; // Name is descriptive, actual file is by ID
             const content = JSON.stringify(teamTasks);
             const boundary = 'task_boundary';
-            let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-            let method = driveFileId ? 'PATCH' : 'POST';
-            if (driveFileId) url = `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart`;
+            const url = `https://www.googleapis.com/upload/drive/v3/files/${SHARED_FILE_ID}?uploadType=multipart`;
+            const method = 'PATCH'; // Always patch an existing file by ID
 
             const body = `--${boundary}\nContent-Type: application/json; charset=UTF-8\n\n${JSON.stringify(metadata)}\n` +
                          `--${boundary}\nContent-Type: application/json\n\n${content}\n--${boundary}--`;

@@ -54,12 +54,11 @@
                 await gapi.client.init({});
                 console.log("GAPI Client Ready");
                 checkAuth();
+                // Enable Login Button ONLY after GAPI client is fully initialized
+                const loginBtn = document.getElementById('login-btn');
+                if (loginBtn) loginBtn.disabled = false;
+                document.getElementById('status-bar').innerText = "☁️ Ready";
             });
-
-            // Enable Login Button
-            const loginBtn = document.getElementById('login-btn');
-            if (loginBtn) loginBtn.disabled = false;
-            document.getElementById('status-bar').innerText = "☁️ Ready";
         }
 
         function checkAuth() {

@@ -12,21 +12,21 @@
 
     <style>
         :root { --primary: #007bff; --success: #28a745; --bg: #f2f4f7; --text: #333; }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; min-height: 100vh; color: var(--text); }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
         #status-bar { background: #333; color: white; padding: 14px; text-align: center; font-size: 13px; font-weight: bold; position: sticky; top: 0; z-index: 1000; }
         .container { padding: 15px; max-width: 500px; margin: 0 auto; width: 100%; box-sizing: border-box; }
         .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .task-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #fff; border-radius: 12px; margin-bottom: 8px; border: 1px solid #eee; }
         input[type="text"] { width: 100%; padding: 14px; border-radius: 12px; border: 2px solid #eee; margin-bottom: 12px; font-size: 16px; box-sizing: border-box; outline: none; }
         .btn { padding: 16px; border: none; border-radius: 14px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; }
-        .btn:disabled { background: #ccc !important; cursor: not-allowed; }
+        .btn:disabled { background: #ccc !important; cursor: not-allowed; opacity: 0.6; }
         .btn-add { background: var(--primary); color: white; }
         .btn-sync { background: #fff; border: 1px solid #ddd; color: #666; margin-top: 10px; }
         .hidden { display: none !important; }
     </style>
 
     <script>
-        // 1. CONFIGURATION
+        // 1. CONFIGURATION (REPLACE WITH YOUR ID)
         const CLIENT_ID = '292932461234-cu1s96jcvqcseojqpqvul266fk719ung.apps.googleusercontent.com';
         const SCOPES = 'https://www.googleapis.com/auth/drive.file';
         
@@ -34,15 +34,8 @@
         let driveFileId = null;
         let tokenClient = null;
 
-        // 2. GOOGLE CALLBACKS (Defined first so they are ready)
-        window.gapiLoaded = function() {
-            gapi.load('client', async () => {
-                await gapi.client.init({});
-                console.log("GAPI Initialized");
-            });
-        };
-
-        window.gisLoaded = function() {
+        // 2. INITIALIZATION LOGIC
+        function initGIS() {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
@@ -54,30 +47,31 @@
                     startApp();
                 },
             });
-            // Unlock button
-            const btn = document.getElementById('login-btn');
-            if(btn) btn.disabled = false;
+            // Button is now safe to click
+            document.getElementById('login-btn').disabled = false;
+            document.getElementById('status-bar').innerText = "☁️ Ready to Sync";
             
-            checkAuth();
-        };
-
-        // 3. CORE LOGIC
-        function checkAuth() {
+            // Check for existing login
             const token = localStorage.getItem('g_token');
             const expiry = localStorage.getItem('g_expiry');
             if (token && expiry && Date.now() < (expiry - 60000)) {
                 gapi.client.setToken({ access_token: token });
                 startApp();
-            } else if (token && tokenClient) {
-                tokenClient.requestAccessToken({ prompt: 'none' });
             }
         }
 
+        function initGAPI() {
+            gapi.load('client', async () => {
+                await gapi.client.init({});
+            });
+        }
+
+        // 3. EVENT HANDLERS
         function handleAuth() {
             if (tokenClient) {
                 tokenClient.requestAccessToken({prompt: 'consent'});
             } else {
-                alert("Please wait, connecting to Google...");
+                alert("Connection still initializing. Try again in 2 seconds.");
             }
         }
 
@@ -106,7 +100,7 @@
                 }
                 document.getElementById('status-bar').innerText = "✅ Team Synced";
             } catch (e) {
-                document.getElementById('status-bar').innerText = "⚠️ Connection Error";
+                document.getElementById('status-bar').innerText = "⚠️ Cloud Access Paused";
             }
         }
 
@@ -155,14 +149,28 @@
         }
 
         function logout() { localStorage.clear(); location.reload(); }
-
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
-        }
     </script>
+    
+    <script src="https://accounts.google.com/gsi/client" async></script>
+    <script src="https://apis.google.com/js/api.js" async></script>
 
-    <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()" async defer></script>
-    <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()" async defer></script>
+    <script>
+        // This script runs AFTER the HTML is parsed to wait for Google scripts
+        window.addEventListener('load', () => {
+            // Check every 100ms if Google objects exist
+            const checkGoogle = setInterval(() => {
+                if (typeof google !== 'undefined' && typeof gapi !== 'undefined') {
+                    clearInterval(checkGoogle);
+                    initGIS();
+                    initGAPI();
+                }
+            }, 100);
+            
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
+            }
+        });
+    </script>
 </head>
 <body>
 

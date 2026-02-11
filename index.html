@@ -2,371 +2,351 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Task Manager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Team Sync</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
     <style>
-        :root { --primary: #2563eb; --danger: #dc2626; --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0; --text: #1e293b; }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; }
+        :root { --primary: #2563eb; --danger: #dc2626; --bg: #f1f5f9; --card: #ffffff; --text: #334155; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
         
         /* Layout */
-        .app-layout { display: flex; flex: 1; overflow: hidden; }
-        .sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 1rem; }
-        .main-content { flex: 1; padding: 2rem; overflow-y: auto; }
+        header { background: var(--card); padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        .main-container { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
         
         /* Components */
-        .btn { background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 500; cursor: pointer; }
+        .card { background: var(--card); border-radius: 12px; padding: 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .btn { background: var(--primary); color: white; border: none; padding: 0.8rem 1.2rem; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
         .btn-danger { background: var(--danger); }
-        .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        
-        input, select, textarea { width: 100%; padding: 0.5rem; margin-bottom: 0.5rem; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; }
-        
-        /* Groups */
-        .group-item { padding: 0.75rem; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-        .group-item:hover { background: #f1f5f9; }
-        .group-item.active { background: #eff6ff; color: var(--primary); font-weight: bold; }
+        .btn-outline { background: transparent; border: 1px solid #cbd5e1; color: var(--text); }
+        input, select, textarea { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+
+        /* Groups Scroll */
+        .group-scroll { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
+        .group-chip { white-space: nowrap; padding: 8px 16px; background: #e2e8f0; border-radius: 20px; font-size: 0.9rem; cursor: pointer; border: 2px solid transparent; }
+        .group-chip.active { background: #eff6ff; color: var(--primary); border-color: var(--primary); font-weight: bold; }
 
         /* Tasks */
-        .task-card { background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .task-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem; }
-        .task-meta { display: flex; gap: 1rem; font-size: 0.85rem; color: #64748b; margin-top: 0.5rem; align-items: center; }
-        .avatar { width: 24px; height: 24px; border-radius: 50%; vertical-align: middle; margin-right: 5px; }
-        
+        .task-item { border-left: 4px solid var(--primary); margin-bottom: 10px; }
+        .task-meta { display: flex; gap: 10px; font-size: 0.8rem; color: #64748b; margin-top: 5px; align-items: center; }
+        .avatar { width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; }
+        .status-pill { font-size: 10px; background: #dbeafe; color: var(--primary); padding: 2px 6px; border-radius: 4px; }
+
         /* Modal */
-        dialog { border: none; border-radius: 8px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); padding: 0; width: 400px; max-width: 90vw; }
-        dialog::backdrop { background: rgba(0,0,0,0.3); }
-        .modal-header { padding: 1rem; border-bottom: 1px solid var(--border); font-weight: bold; display: flex; justify-content: space-between; }
-        .modal-body { padding: 1rem; }
-        .modal-footer { padding: 1rem; background: #f8fafc; display: flex; justify-content: flex-end; gap: 0.5rem; }
-
+        dialog { border: none; border-radius: 12px; width: 90%; max-width: 400px; padding: 0; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+        dialog::backdrop { background: rgba(0,0,0,0.4); }
+        .modal-content { padding: 1.5rem; }
+        
         .hidden { display: none !important; }
-        #status-bar { background: #1e293b; color: white; padding: 0.5rem; text-align: center; font-size: 0.8rem; }
-        .empty-state { text-align: center; color: #94a3b8; margin-top: 3rem; }
+        .fab { position: fixed; bottom: 20px; right: 20px; width: 56px; height: 56px; border-radius: 28px; background: var(--primary); color: white; border: none; font-size: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer; display: flex; align-items: center; justify-content: center; }
     </style>
-
+    
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
 </head>
 <body>
 
-<div id="status-bar">Initializing...</div>
+    <div id="auth-view" style="display:flex; flex:1; flex-direction:column; justify-content:center; align-items:center; padding:2rem; text-align:center;">
+        <h1>Team Sync</h1>
+        <p style="color:#64748b;">Collaborative Task Manager</p>
+        <button id="login-btn" class="btn" onclick="handleAuth()" disabled>Sign in with Google</button>
+        <p id="install-guide" style="margin-top:20px; font-size:0.8rem; color:#94a3b8; display:none;">Add to Home Screen to install</p>
+    </div>
 
-<div id="auth-view" style="display: flex; flex: 1; justify-content: center; align-items: center; flex-direction: column;">
-    <h1>Team Workspace</h1>
-    <p style="color: #64748b; margin-bottom: 2rem;">Sign in to access your shared team file.</p>
-    <button id="login-btn" class="btn" onclick="handleAuth()" disabled>Sign in with Google</button>
-</div>
+    <div id="app-view" class="hidden">
+        <header>
+            <div style="font-weight:bold; font-size:1.1rem;">Team Sync</div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span id="sync-status" style="font-size:0.8rem;">☁️</span>
+                <img id="user-pic" src="" style="width:32px; height:32px; border-radius:50%;">
+            </div>
+        </header>
 
-<div id="app-view" class="app-layout hidden">
-    <div class="sidebar">
-        <div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 10px;">
-            <img id="my-avatar" class="avatar" style="width: 32px; height: 32px;" src="">
+        <div class="main-container">
             <div>
-                <div id="my-name" style="font-weight: bold; font-size: 0.9rem;"></div>
-                <div style="font-size: 0.75rem; color: #64748b; cursor: pointer;" onclick="logout()">Sign Out</div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                    <small style="font-weight:bold; color:#64748b;">PROJECTS</small>
+                    <small style="color:var(--primary); cursor:pointer;" onclick="openGroupModal()">+ New</small>
+                </div>
+                <div class="group-scroll" id="group-list">
+                    </div>
+            </div>
+
+            <div id="task-container">
+                <div style="text-align:center; padding:2rem; color:#94a3b8;">Select a project to view tasks</div>
             </div>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <span style="font-weight: bold; color: #475569;">GROUPS</span>
-            <button class="btn-ghost" style="padding: 2px 8px; font-size: 1.2rem;" onclick="openGroupModal()">+</button>
-        </div>
-        <div id="group-list">
-            </div>
+        <button id="fab-add" class="fab hidden" onclick="openTaskModal()">+</button>
     </div>
 
-    <div class="main-content">
-        <div id="tasks-container">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                <h2 id="active-group-name" style="margin: 0;">Select a Group</h2>
-                <button id="add-task-btn" class="btn hidden" onclick="openTaskModal()">+ New Task</button>
-            </div>
-            <div id="task-list">
-                <div class="empty-state">Select or create a group to start.</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<dialog id="group-modal">
-    <div class="modal-header">Create New Group <span style="cursor:pointer" onclick="closeModal('group-modal')">✕</span></div>
-    <div class="modal-body">
-        <label>Group Name</label>
-        <input type="text" id="new-group-name" placeholder="e.g., Marketing Team">
-    </div>
-    <div class="modal-footer">
-        <button class="btn" onclick="createGroup()">Create Group</button>
-    </div>
-</dialog>
-
-<dialog id="task-modal">
-    <div class="modal-header">New Task <span style="cursor:pointer" onclick="closeModal('task-modal')">✕</span></div>
-    <div class="modal-body">
-        <label>Title</label>
-        <input type="text" id="task-title" placeholder="What needs to be done?">
-        
-        <label>Description</label>
-        <textarea id="task-desc" rows="3" placeholder="Add details..."></textarea>
-        
-        <label>Assign To</label>
-        <select id="task-assignee">
-            <option value="">Unassigned</option>
+    <dialog id="task-modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0">New Task</h3>
+            <input type="text" id="t-title" placeholder="Task Title">
+            <textarea id="t-desc" rows="3" placeholder="Description"></textarea>
+            <select id="t-assign">
+                <option value="">Unassigned</option>
             </select>
+            <input type="date" id="t-due">
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:1rem;">
+                <button class="btn btn-outline" onclick="closeModal('task-modal')">Cancel</button>
+                <button class="btn" onclick="saveTask()">Save</button>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="group-modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0">New Project Group</h3>
+            <input type="text" id="g-name" placeholder="Project Name (e.g. Marketing)">
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:1rem;">
+                <button class="btn btn-outline" onclick="closeModal('group-modal')">Cancel</button>
+                <button class="btn" onclick="saveGroup()">Create</button>
+            </div>
+        </div>
+    </dialog>
+
+    <script>
+        /* --- CONFIGURATION --- */
+        // 1. SET YOUR CLIENT ID
+        const CLIENT_ID = '292932461234-cu1s96jcvqcseojqpqvul266fk719ung.apps.googleusercontent.com';
         
-        <label>Due Date</label>
-        <input type="date" id="task-due">
-    </div>
-    <div class="modal-footer">
-        <button class="btn" onclick="createTask()">Save Task</button>
-    </div>
-</dialog>
+        // 2. SET YOUR SHARED FILE ID (Create a text file in Drive, share it with team, paste ID here)
+        const FILE_ID = '1hEymh3AoS4MuEuVBtuAt-KgWfOrPYbuI'; 
+    
+        const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
-<script>
-    // --- CONFIGURATION ---
-    const CLIENT_ID = '292932461234-togilbvt1k9qh570skpu83cr6itns7r1.apps.googleusercontent.com'; // Use yours
-    const FILE_ID = '1QuZ03Nu3FxVvUJfFlMl3RHt1XqB2r_2C';
-    const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
+        /* --- STATE --- */
+        let db = { users: [], groups: [], tasks: [] };
+        let currentUser = null;
+        let activeGroupId = null;
+        let tokenClient;
 
-    // --- STATE ---
-    let db = { users: [], groups: [], tasks: [] }; // The "Database"
-    let currentUser = null;
-    let activeGroupId = null;
-    let tokenClient;
+        /* --- INITIALIZATION --- */
+        function init() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID, scope: SCOPES,
+                callback: (resp) => {
+                    if (resp.error) return;
+                    localStorage.setItem('g_token', resp.access_token);
+                    localStorage.setItem('g_expiry', Date.now() + (resp.expires_in * 1000));
+                    startApp();
+                }
+            });
 
-    // --- INITIALIZATION ---
-    function init() {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID, scope: SCOPES,
-            callback: (resp) => {
-                if(resp.error) return;
-                localStorage.setItem('token', resp.access_token);
-                localStorage.setItem('expiry', Date.now() + (resp.expires_in * 1000));
+            gapi.load('client', async () => {
+                await gapi.client.init({});
+                document.getElementById('login-btn').disabled = false;
+                checkSession();
+            });
+
+            // Register Service Worker for PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js');
+            }
+        }
+
+        function checkSession() {
+            const token = localStorage.getItem('g_token');
+            const expiry = localStorage.getItem('g_expiry');
+            if (token && expiry && Date.now() < expiry) {
+                gapi.client.setToken({ access_token: token });
                 startApp();
             }
-        });
-
-        gapi.load('client', async () => {
-            await gapi.client.init({});
-            document.getElementById('login-btn').disabled = false;
-            document.getElementById('status-bar').innerText = "Ready to Connect";
-            checkSession();
-        });
-    }
-
-    function checkSession() {
-        const token = localStorage.getItem('token');
-        const expiry = localStorage.getItem('expiry');
-        if (token && expiry && Date.now() < expiry) {
-            gapi.client.setToken({ access_token: token });
-            startApp();
         }
-    }
 
-    function handleAuth() { tokenClient.requestAccessToken(); }
+        function handleAuth() { tokenClient.requestAccessToken(); }
 
-    async function startApp() {
-        document.getElementById('auth-view').classList.add('hidden');
-        document.getElementById('app-view').classList.remove('hidden');
-        document.getElementById('status-bar').innerText = "🔄 Loading Data...";
-        
-        // 1. Get User Info
-        try {
-            const userResp = await gapi.client.request({ path: 'https://www.googleapis.com/oauth2/v3/userinfo' });
-            currentUser = userResp.result;
-            document.getElementById('my-name').innerText = currentUser.name;
-            document.getElementById('my-avatar').src = currentUser.picture;
-        } catch(e) { console.error("User info failed", e); }
-
-        // 2. Load File Data
-        await sync();
-    }
-
-    // --- CORE DATA LOGIC ---
-    async function sync() {
-        try {
-            const resp = await gapi.client.request({
-                path: `https://www.googleapis.com/drive/v3/files/${FILE_ID}?alt=media`,
-                method: 'GET'
-            });
+        async function startApp() {
+            document.getElementById('auth-view').classList.add('hidden');
+            document.getElementById('app-view').classList.remove('hidden');
             
-            // Parse or Initialize DB
-            db = resp.result && typeof resp.result === 'object' ? resp.result : { users: [], groups: [], tasks: [] };
-            
-            // Ensure structure exists (migration safe)
-            if(!db.users) db.users = [];
-            if(!db.groups) db.groups = [];
-            if(!db.tasks) db.tasks = [];
+            // Get User Profile
+            try {
+                const res = await gapi.client.request({ path: 'https://www.googleapis.com/oauth2/v3/userinfo' });
+                currentUser = res.result;
+                document.getElementById('user-pic').src = currentUser.picture;
+            } catch(e) { console.error(e); }
 
-            // Auto-Register Current User
-            if (currentUser) {
-                const exists = db.users.find(u => u.email === currentUser.email);
-                if (!exists) {
-                    db.users.push({ email: currentUser.email, name: currentUser.name, picture: currentUser.picture });
-                    save(); // Save the new user to cloud immediately
+            await sync(true); // Initial Sync
+            
+            // Auto-refresh every 10 seconds to keep team in sync
+            setInterval(() => sync(false), 10000); 
+        }
+
+        /* --- DRIVE SYNC CORE --- */
+        async function sync(isInitial = false) {
+            const status = document.getElementById('sync-status');
+            if(isInitial) status.innerText = "🔄";
+
+            try {
+                const resp = await gapi.client.request({
+                    path: `https://www.googleapis.com/drive/v3/files/${FILE_ID}?alt=media`,
+                    method: 'GET'
+                });
+                
+                // Merge Logic: We just take cloud state as truth for simplicity in this setup
+                const cloudDB = resp.result || {};
+                db = { 
+                    users: cloudDB.users || [], 
+                    groups: cloudDB.groups || [], 
+                    tasks: cloudDB.tasks || [] 
+                };
+
+                // Auto-register current user if new
+                if (currentUser && !db.users.find(u => u.email === currentUser.email)) {
+                    db.users.push({ email: currentUser.email, name: currentUser.name, pic: currentUser.picture });
+                    await saveToCloud(); // Save immediately so others see me
                 }
+
+                render();
+                status.innerText = "✅";
+            } catch (e) {
+                console.error(e);
+                status.innerText = "⚠️";
             }
-            
-            render();
-            document.getElementById('status-bar').innerText = "✅ Up to date";
-        } catch (e) {
-            console.error(e);
-            document.getElementById('status-bar').innerText = "⚠️ Sync Error";
-        }
-    }
-
-    async function save() {
-        document.getElementById('status-bar').innerText = "☁️ Saving...";
-        try {
-            await gapi.client.request({
-                path: `https://www.googleapis.com/upload/drive/v3/files/${FILE_ID}?uploadType=media`,
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(db)
-            });
-            document.getElementById('status-bar').innerText = "✅ Saved";
-        } catch (e) {
-            document.getElementById('status-bar').innerText = "⚠️ Save Failed!";
-        }
-    }
-
-    // --- UI RENDERING ---
-    function render() {
-        // Render Groups
-        const groupList = document.getElementById('group-list');
-        groupList.innerHTML = db.groups.map(g => `
-            <div class="group-item ${activeGroupId === g.id ? 'active' : ''}" onclick="selectGroup(${g.id})">
-                <span># ${g.name}</span>
-                <span onclick="deleteGroup(${g.id}, event)" style="color:#cbd5e1; font-size:0.8rem;">✕</span>
-            </div>
-        `).join('');
-
-        // Render Tasks (if group selected)
-        const taskContainer = document.getElementById('task-list');
-        const header = document.getElementById('active-group-name');
-        const addBtn = document.getElementById('add-task-btn');
-
-        if (!activeGroupId) {
-            header.innerText = "Select a Group";
-            addBtn.classList.add('hidden');
-            taskContainer.innerHTML = '<div class="empty-state">Select a group from the sidebar</div>';
-            return;
         }
 
-        const group = db.groups.find(g => g.id === activeGroupId);
-        if(group) {
-            header.innerText = group.name;
-            addBtn.classList.remove('hidden');
+        async function saveToCloud() {
+            document.getElementById('sync-status').innerText = "☁️...";
+            try {
+                await gapi.client.request({
+                    path: `https://www.googleapis.com/upload/drive/v3/files/${FILE_ID}?uploadType=media`,
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(db)
+                });
+                document.getElementById('sync-status').innerText = "✅";
+            } catch (e) {
+                document.getElementById('sync-status').innerText = "❌";
+                alert("Save failed. Check internet connection.");
+            }
+        }
+
+        /* --- RENDERING --- */
+        function render() {
+            // Render Groups
+            const gList = document.getElementById('group-list');
+            gList.innerHTML = db.groups.map(g => `
+                <div class="group-chip ${activeGroupId === g.id ? 'active' : ''}" onclick="selectGroup(${g.id})">
+                    ${g.name}
+                    ${activeGroupId === g.id ? `<span onclick="deleteGroup(${g.id}, event)" style="margin-left:5px;opacity:0.6">✕</span>` : ''}
+                </div>
+            `).join('');
+
+            // Render Tasks
+            const tContainer = document.getElementById('task-container');
+            const fab = document.getElementById('fab-add');
+
+            if (!activeGroupId) {
+                tContainer.innerHTML = '<div style="text-align:center;padding:2rem;color:#94a3b8;">Select a project above ☝️</div>';
+                fab.classList.add('hidden');
+                return;
+            }
+
+            fab.classList.remove('hidden');
+            const tasks = db.tasks.filter(t => t.groupId === activeGroupId);
             
-            const groupTasks = db.tasks.filter(t => t.groupId === activeGroupId);
-            
-            if (groupTasks.length === 0) {
-                taskContainer.innerHTML = '<div class="empty-state">No tasks yet. Create one!</div>';
+            if (tasks.length === 0) {
+                tContainer.innerHTML = '<div style="text-align:center;padding:2rem;color:#94a3b8;">No tasks. Tap + to add one.</div>';
             } else {
-                taskContainer.innerHTML = groupTasks.map(t => {
+                tContainer.innerHTML = tasks.map(t => {
                     const assignee = db.users.find(u => u.email === t.assignedTo);
-                    const assigneeHtml = assignee 
-                        ? `<span style="background: #e2e8f0; padding: 2px 8px; border-radius: 12px; font-size: 12px;">
-                             <img src="${assignee.picture}" class="avatar" style="width:16px;height:16px;margin-right:4px"> ${assignee.name}
-                           </span>` 
-                        : '<span style="color:#94a3b8">Unassigned</span>';
-                    
                     return `
-                    <div class="task-card">
-                        <div class="task-header">
+                    <div class="card task-item">
+                        <div style="display:flex; justify-content:space-between;">
                             <strong>${t.title}</strong>
-                            <button onclick="deleteTask(${t.id})" style="color:#ef4444; border:none; background:none; cursor:pointer;">✕</button>
+                            <button onclick="deleteTask(${t.id})" style="color:#ef4444;background:none;border:none;font-weight:bold;">🗑</button>
                         </div>
-                        <div style="color: #475569; font-size: 0.9rem; margin-bottom: 0.5rem;">${t.desc || ''}</div>
+                        <div style="color:#64748b; font-size:0.9rem; margin:5px 0;">${t.desc}</div>
                         <div class="task-meta">
-                            ${assigneeHtml}
-                            <span>📅 ${t.due || 'No Date'}</span>
+                            ${assignee ? `<img src="${assignee.pic}" class="avatar"> ${assignee.name.split(' ')[0]}` : '<span class="status-pill">Unassigned</span>'}
+                            ${t.due ? `<span>📅 ${t.due}</span>` : ''}
                         </div>
                     </div>
                 `}).join('');
             }
         }
-    }
 
-    // --- ACTIONS ---
-    function selectGroup(id) {
-        activeGroupId = id;
-        render();
-    }
-
-    function createGroup() {
-        const name = document.getElementById('new-group-name').value;
-        if (!name) return;
-        db.groups.push({ id: Date.now(), name: name });
-        closeModal('group-modal');
-        document.getElementById('new-group-name').value = '';
-        save();
-        render();
-    }
-
-    function deleteGroup(id, e) {
-        e.stopPropagation(); // Prevent selecting the group while deleting
-        if(!confirm("Delete group and all its tasks?")) return;
-        db.groups = db.groups.filter(g => g.id !== id);
-        db.tasks = db.tasks.filter(t => t.groupId !== id); // Cascade delete
-        if(activeGroupId === id) activeGroupId = null;
-        save();
-        render();
-    }
-
-    function createTask() {
-        const title = document.getElementById('task-title').value;
-        const desc = document.getElementById('task-desc').value;
-        const assignee = document.getElementById('task-assignee').value;
-        const due = document.getElementById('task-due').value;
-
-        if(!title) return alert("Title is required");
-
-        db.tasks.push({
-            id: Date.now(),
-            groupId: activeGroupId,
-            title, desc, assignedTo: assignee, due
-        });
-
-        closeModal('task-modal');
-        // Clear inputs
-        document.getElementById('task-title').value = '';
-        document.getElementById('task-desc').value = '';
+        /* --- ACTIONS --- */
+        function selectGroup(id) { activeGroupId = id; render(); }
         
-        save();
-        render();
-    }
-
-    function deleteTask(id) {
-        if(!confirm("Delete task?")) return;
-        db.tasks = db.tasks.filter(t => t.id !== id);
-        save();
-        render();
-    }
-
-    // --- MODAL HELPERS ---
-    function openGroupModal() { document.getElementById('group-modal').showModal(); }
-    
-    function openTaskModal() { 
-        // Populate Assignee Dropdown with "All Users" in the system
-        const select = document.getElementById('task-assignee');
-        select.innerHTML = '<option value="">Unassigned</option>' + 
-            db.users.map(u => `<option value="${u.email}">${u.name}</option>`).join('');
-        
-        document.getElementById('task-modal').showModal(); 
-    }
-    
-    function closeModal(id) { document.getElementById(id).close(); }
-
-    function logout() { localStorage.clear(); location.reload(); }
-
-    // --- BOOT ---
-    const checkLib = setInterval(() => {
-        if (typeof google !== 'undefined' && typeof gapi !== 'undefined') {
-            clearInterval(checkLib);
-            init();
+        async function saveGroup() {
+            const name = document.getElementById('g-name').value;
+            if(!name) return;
+            // Refresh before write to minimize conflicts
+            await sync(); 
+            db.groups.push({ id: Date.now(), name });
+            document.getElementById('g-name').value = '';
+            closeModal('group-modal');
+            saveToCloud();
+            render();
         }
-    }, 200);
-</script>
 
+        async function deleteGroup(id, e) {
+            e.stopPropagation();
+            if(!confirm("Delete group and all tasks?")) return;
+            await sync();
+            db.groups = db.groups.filter(g => g.id !== id);
+            db.tasks = db.tasks.filter(t => t.groupId !== id);
+            activeGroupId = null;
+            saveToCloud();
+            render();
+        }
+
+        async function saveTask() {
+            const title = document.getElementById('t-title').value;
+            if(!title) return;
+            
+            const task = {
+                id: Date.now(),
+                groupId: activeGroupId,
+                title: title,
+                desc: document.getElementById('t-desc').value,
+                assignedTo: document.getElementById('t-assign').value,
+                due: document.getElementById('t-due').value
+            };
+
+            await sync(); // Refresh first
+            db.tasks.push(task);
+            
+            // Cleanup
+            document.getElementById('t-title').value = '';
+            document.getElementById('t-desc').value = '';
+            closeModal('task-modal');
+            saveToCloud();
+            render();
+        }
+
+        async function deleteTask(id) {
+            if(!confirm("Complete this task?")) return;
+            await sync();
+            db.tasks = db.tasks.filter(t => t.id !== id);
+            saveToCloud();
+            render();
+        }
+
+        /* --- MODAL UTILS --- */
+        function openGroupModal() { document.getElementById('group-modal').showModal(); }
+        function closeModal(id) { document.getElementById(id).close(); }
+        function openTaskModal() {
+            const sel = document.getElementById('t-assign');
+            sel.innerHTML = '<option value="">Unassigned</option>' + 
+                db.users.map(u => `<option value="${u.email}">${u.name}</option>`).join('');
+            document.getElementById('task-modal').showModal();
+        }
+
+        /* --- BOOTSTRAP --- */
+        const timer = setInterval(() => {
+            if (typeof google !== 'undefined' && typeof gapi !== 'undefined') {
+                clearInterval(timer);
+                init();
+            }
+        }, 100);
+    </script>
 </body>
 </html>

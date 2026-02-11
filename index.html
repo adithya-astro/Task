@@ -27,17 +27,19 @@
 
     <script>
         // 1. SETTINGS
-        const GOOGLE_CLIENT_ID = '292932461234-cu1s96jcvqcseojqpqvul266fk719ung.apps.googleusercontent.com';
-        const SHARED_FILE_ID = '1QuZ03Nu3FxVvUJfFlMl3RHt1XqB2r_2C'; // <<< IMPORTANT: REPLACE WITH YOUR SHARED GOOGLE DRIVE FILE ID
-        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+        const GOOGLE_CLIENT_ID = '292932461234-togilbvt1k9qh570skpu83cr6itns7r1.apps.googleusercontent.com';
+        
+        // <<< IMPORTANT: Create a blank text file in Drive, paste its ID here.
+        // <<< SHARE this file with your team as "Editor".
+        const SHARED_FILE_ID = '1hEymh3AoS4MuEuVBtuAt-KgWfOrPYbuI';
+        // Use full drive scope to ensure we can edit a hardcoded file ID
+        const SCOPES = 'https://www.googleapis.com/auth/drive';
         
         let teamTasks = [];
-        // let driveFileId = null; // Removed as we use SHARED_FILE_ID directly
         let tokenClient = null;
 
-        // 2. THE INITIALIZERS (Manually called after scripts load)
+        // 2. THE INITIALIZERS
         function initializeApp() {
-            // Setup Google Identity Services
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: GOOGLE_CLIENT_ID,
                 scope: SCOPES,
@@ -50,12 +52,10 @@
                 },
             });
 
-            // Setup Google API Client
             gapi.load('client', async () => {
                 await gapi.client.init({});
-                console.log("GAPI Client Ready");
+                // Disable discovery docs to speed up load, we use direct paths
                 checkAuth();
-                // Enable Login Button ONLY after GAPI client is fully initialized
                 const loginBtn = document.getElementById('login-btn');
                 if (loginBtn) loginBtn.disabled = false;
                 document.getElementById('status-bar').innerText = "☁️ Ready";
@@ -74,8 +74,6 @@
         function handleAuth() {
             if (tokenClient) {
                 tokenClient.requestAccessToken({prompt: 'consent'});
-            } else {
-                alert("App is still loading. Please wait 2 seconds.");
             }
         }
 
@@ -85,48 +83,48 @@
             await syncFromDrive();
         }
 
+        // 3. CORE FUNCTIONS
         async function syncFromDrive() {
-            if (SHARED_FILE_ID === 'YOUR_GOOGLE_DRIVE_FILE_ID_HERE' || !SHARED_FILE_ID) {
-                document.getElementById('status-bar').innerText = "⚠️ Please set SHARED_FILE_ID in index.html";
-                return;
-            }
-            document.getElementById('status-bar').innerText = "🔄 Syncing Team Data...";
+            document.getElementById('status-bar').innerText = "🔄 Syncing...";
             try {
-                // Directly fetch content using the SHARED_FILE_ID
-                const content = await gapi.client.request({
-                    path: `https://www.googleapis.com/drive/v3/files/${SHARED_FILE_ID}`,
-                    params: { alt: 'media' }
+                // Fetch file content directly
+                const response = await gapi.client.request({
+                    path: `https://www.googleapis.com/drive/v3/files/${SHARED_FILE_ID}?alt=media`,
+                    method: 'GET'
                 });
-                teamTasks = Array.isArray(content.result) ? content.result : [];
+                
+                // If file is empty, response.result might be empty string
+                teamTasks = response.result || [];
+                // Ensure it's an array (in case file is new/empty)
+                if (!Array.isArray(teamTasks)) teamTasks = [];
+                
                 renderTasks();
-                document.getElementById('status-bar').innerText = "✅ Team Synced";
+                document.getElementById('status-bar').innerText = "✅ Synced";
             } catch (e) {
-                console.error('Error syncing from Drive:', e);
-                document.getElementById('status-bar').innerText = "⚠️ Could not access shared file. Check ID and permissions.";
+                console.error(e);
+                document.getElementById('status-bar').innerText = "⚠️ Sync Failed. Check Permissions.";
             }
         }
 
         async function saveToDrive() {
-            if (SHARED_FILE_ID === 'YOUR_GOOGLE_DRIVE_FILE_ID_HERE' || !SHARED_FILE_ID) {
-                document.getElementById('status-bar').innerText = "⚠️ Cannot save: SHARED_FILE_ID not set.";
-                return;
-            }
             document.getElementById('status-bar').innerText = "☁️ Saving...";
-            const metadata = { name: 'team_tasks_shared.json', mimeType: 'application/json' }; // Name is descriptive, actual file is by ID
-            const content = JSON.stringify(teamTasks);
-            const boundary = 'task_boundary';
-            const url = `https://www.googleapis.com/upload/drive/v3/files/${SHARED_FILE_ID}?uploadType=multipart`;
-            const method = 'PATCH'; // Always patch an existing file by ID
-
-            const body = `--${boundary}\nContent-Type: application/json; charset=UTF-8\n\n${JSON.stringify(metadata)}\n` +
-                         `--${boundary}\nContent-Type: application/json\n\n${content}\n--${boundary}--`;
-
-            await gapi.client.request({
-                path: url, method: method,
-                headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-                body: body
-            });
-            document.getElementById('status-bar').innerText = "✅ Saved to Cloud";
+            
+            // SIMPLIFIED UPLOAD: Use uploadType=media to just overwrite content
+            // This avoids the complex multipart boundary errors
+            const url = `https://www.googleapis.com/upload/drive/v3/files/${SHARED_FILE_ID}?uploadType=media`;
+            
+            try {
+                await gapi.client.request({
+                    path: url,
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(teamTasks)
+                });
+                document.getElementById('status-bar').innerText = "✅ Saved";
+            } catch (e) {
+                console.error(e);
+                document.getElementById('status-bar').innerText = "⚠️ Save Failed";
+            }
         }
 
         function renderTasks() {
@@ -134,7 +132,7 @@
             list.innerHTML = teamTasks.map(t => `
                 <div class="task-item">
                     <span>${t.text}</span>
-                    <button onclick="deleteTask(${t.id})" style="color:red; background:none; border:none; font-weight:bold; cursor:pointer;">Delete</button>
+                    <button onclick="deleteTask(${t.id})" style="color:red; background:none; border:none; font-weight:bold; cursor:pointer;">X</button>
                 </div>
             `).join('');
         }
@@ -142,9 +140,11 @@
         function addTask() {
             const input = document.getElementById('taskInput');
             if (!input.value.trim()) return;
+            // Add to LOCAL list
             teamTasks.push({ id: Date.now(), text: input.value });
             input.value = "";
             renderTasks();
+            // Push to CLOUD
             saveToDrive();
         }
 
@@ -156,19 +156,13 @@
 
         function logout() { localStorage.clear(); location.reload(); }
 
-        // 3. THE WAITING LOOP (No more ReferenceErrors!)
+        // 4. BOOTSTRAP
         const checkLibraryLoad = setInterval(() => {
-            if (typeof google !== 'undefined' && typeof gapi !== 'undefined' && google.accounts && gapi.load) {
+            if (typeof google !== 'undefined' && typeof gapi !== 'undefined') {
                 clearInterval(checkLibraryLoad);
-                console.log("Libraries detected! Initializing...");
                 initializeApp();
             }
         }, 200);
-
-        // Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
-        }
     </script>
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
